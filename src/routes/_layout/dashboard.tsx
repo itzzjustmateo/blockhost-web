@@ -161,38 +161,50 @@ function StatsCards() {
   );
 }
 
-const MINECRAFT_VERSIONS = [
-  "1.21.5",
-  "1.21.4",
-  "1.20.4",
-  "1.20.1",
-  "1.19.4",
-  "1.18.2",
-  "1.17.1",
-  "1.16.5",
-  "1.12.2",
-];
+const API_BASE = "https://mcutils.com/api/server-jars";
 
-const SERVER_SOFTWARE = [
-  "Paper",
-  "Purpur",
-  "Spigot",
-  "Vanilla",
-  "Fabric",
-  "Forge",
-  "NeoForge",
-];
+const SOFTWARE_LIST = [
+  "paper",
+  "purpur",
+  "spigot",
+  "vanilla",
+  "fabric",
+  "forge",
+  "neoforge",
+  "pufferfish",
+  "folia",
+] as const;
+
+type SoftwareKey = (typeof SOFTWARE_LIST)[number];
+
+function capitalize(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 function CreateServerModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
-  const [version, setVersion] = useState(MINECRAFT_VERSIONS[0]);
-  const [software, setSoftware] = useState(SERVER_SOFTWARE[0]);
+  const [software, setSoftware] = useState<SoftwareKey>("paper");
   const [creating, setCreating] = useState(false);
   const [configuringCloudflare, setConfiguringCloudflare] = useState(false);
   const [showManualDns, setShowManualDns] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const { data: versions, isLoading: versionsLoading } = useQuery({
+    queryKey: ["mc-versions", software],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/${software}`);
+      if (!res.ok) {
+        throw new Error("Failed to fetch versions");
+      }
+      const list: { version: string }[] = await res.json();
+      return list.map((v) => v.version);
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const selectedVersion = versions?.[0] ?? "";
 
   const cleanName = name.toLowerCase().replace(/[^a-z0-9-]/g, "");
   const isSiuuuHD = domain.endsWith(".siuuuhd.de") || domain === "siuuuhd.de";
@@ -234,7 +246,7 @@ function CreateServerModal({ onClose }: { onClose: () => void }) {
         body: JSON.stringify({
           name: name.trim(),
           domain: domain.trim(),
-          minecraftVersion: version,
+          minecraftVersion: selectedVersion,
           software,
         }),
       });
@@ -398,31 +410,35 @@ function CreateServerModal({ onClose }: { onClose: () => void }) {
           </Field>
 
           <div className="grid grid-cols-2 gap-4">
-            <Field label="MC Version">
+            <Field label="Server Software">
               <select
                 className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--sea-ink)]"
-                onChange={(e) => setVersion(e.target.value)}
-                value={version}
+                onChange={(e) => setSoftware(e.target.value as SoftwareKey)}
+                value={software}
               >
-                {MINECRAFT_VERSIONS.map((v) => (
-                  <option key={v} value={v}>
-                    {v}
+                {SOFTWARE_LIST.map((s) => (
+                  <option key={s} value={s}>
+                    {capitalize(s)}
                   </option>
                 ))}
               </select>
             </Field>
 
-            <Field label="Server Software">
+            <Field label="MC Version">
               <select
-                className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--sea-ink)]"
-                onChange={(e) => setSoftware(e.target.value)}
-                value={software}
+                className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--sea-ink)] disabled:opacity-50"
+                disabled={versionsLoading}
+                value={selectedVersion}
               >
-                {SERVER_SOFTWARE.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
+                {versionsLoading ? (
+                  <option>Loading…</option>
+                ) : (
+                  versions?.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                    </option>
+                  ))
+                )}
               </select>
             </Field>
           </div>
