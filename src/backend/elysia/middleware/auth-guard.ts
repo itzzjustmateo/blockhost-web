@@ -2,7 +2,7 @@ import { Elysia } from "elysia";
 import { checkRateLimit, type RateLimitScope } from "../../cache/rate-limit.ts";
 import { authService } from "../../services/auth.service.ts";
 
-const SESSION_RE = /session=([^;]+)/;
+const SESSION_RE = /session_token=([^;]+)/;
 export const authGuard = new Elysia({ name: "auth-guard" }).derive(
   { as: "scoped" },
   async ({ request, set }) => {

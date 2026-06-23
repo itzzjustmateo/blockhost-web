@@ -11,6 +11,7 @@ import {
   Cpu,
   Database,
   Globe,
+  Loader2,
   Plus,
   Server,
   Ticket,
@@ -80,6 +81,8 @@ function Dashboard() {
           Redeem Code
         </button>
       </div>
+
+      <ServerList />
 
       {modal === "redeem" && <RedeemModal onClose={() => setModal(null)} />}
       {modal === "create-server" && (
@@ -157,6 +160,129 @@ function StatsCards() {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+interface ServerRow {
+  createdAt: string | null;
+  domain: string | null;
+  id: string;
+  name: string;
+  online: boolean;
+  playerCount: number;
+  ramMax: number | null;
+  serverId: string;
+  software: string | null;
+  version: string | null;
+}
+
+function ServerList() {
+  const { data: session } = authClient.useSession();
+  const { data, isLoading } = useQuery({
+    queryKey: ["my-servers"],
+    queryFn: () => fetch("/api/servers").then((r) => r.json()),
+    enabled: !!session,
+    refetchInterval: 10_000,
+  });
+
+  const servers: ServerRow[] = data?.servers ?? [];
+
+  return (
+    <div className="mt-10">
+      <h2 className="display-title font-bold text-xl">Your Servers</h2>
+      {isLoading ? (
+        <div className="mt-4 flex items-center gap-2 text-[var(--sea-ink-soft)] text-sm">
+          <Loader2 className="size-4 animate-spin" />
+          Loading servers…
+        </div>
+      ) : (
+        <ServerListContent isLoading={isLoading} servers={servers} />
+      )}
+    </div>
+  );
+}
+
+function ServerListContent({
+  isLoading,
+  servers,
+}: {
+  isLoading: boolean;
+  servers: ServerRow[];
+}) {
+  if (isLoading) {
+    return null;
+  }
+  if (servers.length === 0) {
+    return <EmptyServers />;
+  }
+  return (
+    <div className="mt-4 space-y-3">
+      {servers.map((s) => (
+        <ServerCard key={s.serverId} server={s} />
+      ))}
+    </div>
+  );
+}
+
+function EmptyServers() {
+  return (
+    <div className="mt-6 flex flex-col items-center gap-3 rounded-xl border border-[var(--line)] border-dashed py-12 text-center">
+      <Server className="size-10 text-[var(--kicker)]" />
+      <p className="font-medium text-[var(--sea-ink)] text-sm">
+        No servers yet
+      </p>
+      <p className="text-[var(--sea-ink-soft)] text-xs">
+        Create your first Minecraft server to get started.
+      </p>
+    </div>
+  );
+}
+
+function ServerCard({ server }: { server: ServerRow }) {
+  return (
+    <div className="flex items-center gap-4 rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] px-4 py-3 transition-colors hover:bg-[var(--link-bg-hover)]">
+      <div
+        className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${
+          server.online
+            ? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+            : "bg-[var(--chip-bg)] text-[var(--kicker)]"
+        }`}
+      >
+        <Cpu className="size-5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate font-medium text-[var(--sea-ink)] text-sm">
+            {server.name}
+          </span>
+          <span
+            className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-medium text-xs ${
+              server.online
+                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                : "bg-[var(--chip-bg)] text-[var(--sea-ink-soft)]"
+            }`}
+          >
+            <span
+              className={`inline-block size-1.5 rounded-full ${
+                server.online ? "bg-green-500" : "bg-[var(--kicker)]"
+              }`}
+            />
+            {server.online ? "Online" : "Offline"}
+          </span>
+        </div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[var(--sea-ink-soft)] text-xs">
+          {server.domain && (
+            <span className="flex items-center gap-1">
+              <Globe className="size-3" />
+              {server.domain}
+            </span>
+          )}
+          {server.software && <span>{server.software}</span>}
+          {server.version && <span>MC {server.version}</span>}
+          {server.ramMax && <span>{server.ramMax} MB RAM</span>}
+        </div>
+      </div>
     </div>
   );
 }

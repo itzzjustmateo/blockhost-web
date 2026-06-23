@@ -72,18 +72,28 @@ const elysiaApp = new Elysia({ prefix: "/api" })
         software: string;
       };
       const serverId = crypto.randomUUID();
+      const finalDomain =
+        data.domain ??
+        `${data.name.toLowerCase().replace(/[^a-z0-9-]/g, "")}.siuuuhd.de`;
+
       const server = await serverService.create({
         userId,
         serverId,
         name: data.name,
+        domain: finalDomain,
+        software: data.software,
         ramMb: 2048,
         storageMb: 10_240,
         minecraftVersion: data.minecraftVersion,
       });
+
+      // Download jar in the background
+      downloadServerJar(serverId, data.software, data.minecraftVersion);
+
       return {
         server: {
           ...server,
-          domain: data.domain ?? `${data.name}.siuuuhd.de`,
+          domain: finalDomain,
           software: data.software,
         },
       };
@@ -149,6 +159,40 @@ const orpcHandler = new OpenAPIHandler(router, {
     }),
   ],
 });
+
+async function downloadServerJar(
+  serverId: string,
+  software: string,
+  version: string
+) {
+  const dir = `/tmp/blockhost-servers/${serverId}`;
+  try {
+    const { mkdirSync, writeFileSync, chmodSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    mkdirSync(dir, { recursive: true });
+    const res = await fetch(
+      `https://mcutils.com/api/server-jars/${software}/${version}/download`
+    );
+    if (!res.ok) {
+      return;
+    }
+    const buffer = await res.arrayBuffer();
+    writeFileSync(join(dir, "server.jar"), Buffer.from(buffer));
+    writeFileSync(join(dir, "eula.txt"), "eula=true\n");
+    writeFileSync(
+      join(dir, "server.properties"),
+      "server-port=25565\nmotd=BlockHost Server\nonline-mode=false\n"
+    );
+    writeFileSync(
+      join(dir, "start.sh"),
+      "#!/usr/bin/env bash\njava -Xmx2G -jar server.jar nogui\n"
+    );
+    chmodSync(join(dir, "start.sh"), 0o755);
+    console.log(`[Provision] Server ${serverId} downloaded to ${dir}`);
+  } catch (err) {
+    console.error(`[Provision] Failed to provision ${serverId}:`, err);
+  }
+}
 
 async function handle({ request }: { request: Request }) {
   const path = new URL(request.url).pathname;

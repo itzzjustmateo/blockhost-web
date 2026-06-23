@@ -21,6 +21,8 @@ export const serverService = {
     userId: string;
     serverId: string;
     name: string;
+    domain?: string;
+    software?: string;
     ramMb: number;
     storageMb: number;
     minecraftVersion: string;
@@ -29,9 +31,12 @@ export const serverService = {
       serverId: data.serverId,
       userId: data.userId,
       name: data.name,
+      domain: data.domain,
+      software: data.software,
       online: false,
       maxPlayers: 20,
       ramMax: data.ramMb,
+      version: data.minecraftVersion,
     });
 
     await queueServerProvision({

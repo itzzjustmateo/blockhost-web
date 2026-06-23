@@ -12,6 +12,8 @@ export const serverStatus = pgTable("server_status", {
   serverId: text("server_id").notNull().unique(),
   userId: text("user_id").notNull(),
   name: text().notNull(),
+  domain: text(),
+  software: text(),
   online: boolean().notNull().default(false),
   playerCount: integer("player_count").notNull().default(0),
   maxPlayers: integer("max_players").notNull().default(20),
