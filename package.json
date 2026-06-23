@@ -48,6 +48,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^10.0.3",
     "dotenv": "^17.3.1",
     "husky": "^9.1.7",
     "jsdom": "^28.1.0",
@@ -60,6 +61,7 @@
   "name": "blockhost-web-remake",
   "scripts": {
     "dev": "vite dev --port 3000",
+    "dev:all": "go run ./tools/dev",
     "build": "vite build",
     "preview": "vite preview",
     "generate-routes": "tsr generate",
