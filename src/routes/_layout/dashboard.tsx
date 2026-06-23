@@ -2,6 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   Activity,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Clipboard,
+  Cloud,
   Coins,
   Cpu,
   Database,
@@ -181,21 +186,43 @@ const SERVER_SOFTWARE = [
 function CreateServerModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
-  const [useCustomDomain, setUseCustomDomain] = useState(false);
   const [version, setVersion] = useState(MINECRAFT_VERSIONS[0]);
   const [software, setSoftware] = useState(SERVER_SOFTWARE[0]);
   const [creating, setCreating] = useState(false);
+  const [configuringCloudflare, setConfiguringCloudflare] = useState(false);
+  const [showManualDns, setShowManualDns] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const cleanName = name.toLowerCase().replace(/[^a-z0-9-]/g, "");
+  const isSiuuuHD = domain.endsWith(".siuuuhd.de") || domain === "siuuuhd.de";
+
   useEffect(() => {
-    if (!useCustomDomain && name) {
-      setDomain(`${name.toLowerCase().replace(/[^a-z0-9-]/g, "")}.siuuuhd.de`);
+    if (!domain && cleanName) {
+      setDomain(`${cleanName}.siuuuhd.de`);
     }
-  }, [name, useCustomDomain]);
+  }, [cleanName, domain]);
+
+  const handleCloudflareConfigure = async () => {
+    setConfiguringCloudflare(true);
+    // TODO: call Cloudflare API to add DNS records
+    await new Promise((r) => setTimeout(r, 1200));
+    setConfiguringCloudflare(false);
+  };
+
+  const copyToClipboard = async (text: string, key: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 2000);
+  };
 
   const handleCreate = async () => {
     if (!name.trim()) {
       setError("Server name is required");
+      return;
+    }
+    if (!domain.trim()) {
+      setError("Domain is required");
       return;
     }
     setCreating(true);
@@ -206,7 +233,7 @@ function CreateServerModal({ onClose }: { onClose: () => void }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
-          domain: useCustomDomain ? domain : undefined,
+          domain: domain.trim(),
           minecraftVersion: version,
           software,
         }),
@@ -254,68 +281,118 @@ function CreateServerModal({ onClose }: { onClose: () => void }) {
           </Field>
 
           <Field label="Domain">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <input
-                  checked={!useCustomDomain}
-                  className="size-4 accent-[var(--sea-ink)]"
-                  id="subdomain"
-                  onChange={() => {
-                    setUseCustomDomain(false);
-                    if (name) {
-                      setDomain(
-                        `${name.toLowerCase().replace(/[^a-z0-9-]/g, "")}.siuuuhd.de`
-                      );
-                    }
-                  }}
-                  type="radio"
-                />
-                <label
-                  className="text-[var(--sea-ink-soft)] text-sm"
-                  htmlFor="subdomain"
-                >
-                  Subdomain of{" "}
-                  <span className="font-mono text-[var(--sea-ink)]">
-                    siuuuhd.de
-                  </span>
-                </label>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  checked={useCustomDomain}
-                  className="size-4 accent-[var(--sea-ink)]"
-                  id="custom-domain"
-                  onChange={() => setUseCustomDomain(true)}
-                  type="radio"
-                />
-                <label
-                  className="text-[var(--sea-ink-soft)] text-sm"
-                  htmlFor="custom-domain"
-                >
-                  Custom domain (add DNS records)
-                </label>
-              </div>
+            <div className="space-y-3">
               <div className="relative">
                 <Globe className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--kicker)]" />
                 <input
                   className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] py-2.5 pr-4 pl-9 text-sm outline-none transition-colors focus:border-[var(--sea-ink)]"
                   onChange={(e) => setDomain(e.target.value)}
-                  placeholder={
-                    useCustomDomain
-                      ? "myserver.com"
-                      : `${name || "server"}.siuuuhd.de`
-                  }
+                  placeholder="server.siuuuhd.de or mydomain.com"
                   value={domain}
                 />
               </div>
-              {useCustomDomain && (
-                <p className="flex items-start gap-1.5 text-[var(--sea-ink-soft)] text-xs">
-                  <span className="mt-0.5 shrink-0">→</span>
-                  Point an{" "}
-                  <span className="font-mono text-[var(--sea-ink)]">A</span> or{" "}
-                  <span className="font-mono text-[var(--sea-ink)]">CNAME</span>{" "}
-                  record to Cloudflare for your domain.
-                </p>
+
+              {domain && isSiuuuHD && (
+                <div className="flex items-start gap-2.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 dark:border-green-900/40 dark:bg-green-950/20">
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-600 dark:text-green-400" />
+                  <div>
+                    <p className="font-medium text-green-700 text-sm dark:text-green-300">
+                      SiuuuHD Subdomain — Auto-configured
+                    </p>
+                    <p className="mt-0.5 text-green-600 text-xs dark:text-green-400">
+                      No additional DNS setup needed. This domain is ready to
+                      use.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {domain && !isSiuuuHD && (
+                <div className="space-y-3">
+                  {/* Automatic: Cloudflare */}
+                  <div className="rounded-lg border border-[var(--line)] bg-[var(--surface-strong)] p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <Cloud className="size-4 text-blue-500" />
+                        <span className="font-medium text-[var(--sea-ink)] text-sm">
+                          Auto-configure via Cloudflare
+                        </span>
+                      </div>
+                      <button
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-blue-600 px-3 font-medium text-white text-xs transition-all hover:bg-blue-700 disabled:opacity-50"
+                        disabled={configuringCloudflare}
+                        onClick={handleCloudflareConfigure}
+                        type="button"
+                      >
+                        {configuringCloudflare ? (
+                          <>
+                            <div className="inline-block size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                            Configuring...
+                          </>
+                        ) : (
+                          <>
+                            <Cloud className="size-3.5" />
+                            Configure
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <p className="mt-1.5 text-[var(--sea-ink-soft)] text-xs">
+                      We'll automatically add the required DNS records to your
+                      Cloudflare zone.
+                    </p>
+                  </div>
+
+                  {/* Manual DNS */}
+                  <div className="rounded-lg border border-[var(--line)]">
+                    <button
+                      className="flex w-full items-center justify-between px-3 py-2.5 text-left font-medium text-[var(--sea-ink)] text-sm transition-colors hover:bg-[var(--link-bg-hover)]"
+                      onClick={() => setShowManualDns(!showManualDns)}
+                      type="button"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Globe className="size-4 text-[var(--kicker)]" />
+                        Configure manually via DNS
+                      </span>
+                      {showManualDns ? (
+                        <ChevronDown className="size-4 text-[var(--kicker)]" />
+                      ) : (
+                        <ChevronRight className="size-4 text-[var(--kicker)]" />
+                      )}
+                    </button>
+
+                    {showManualDns && (
+                      <div className="space-y-3 border-[var(--line)] border-t px-3 py-3">
+                        <p className="text-[var(--sea-ink-soft)] text-xs">
+                          Point your domain to BlockHost by adding these DNS
+                          records at your registrar:
+                        </p>
+
+                        <DnsRecordRow
+                          copied={copied}
+                          label="A Record (root)"
+                          onCopy={copyToClipboard}
+                          recordKey="a-root"
+                          value="185.234.72.18"
+                        />
+                        <DnsRecordRow
+                          copied={copied}
+                          label="A Record (www)"
+                          onCopy={copyToClipboard}
+                          recordKey="a-www"
+                          value="185.234.72.18"
+                        />
+                        <DnsRecordRow
+                          copied={copied}
+                          label="CNAME Record"
+                          onCopy={copyToClipboard}
+                          recordKey="cname"
+                          value={`${cleanName || "server"}.blockhost.io`}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           </Field>
@@ -531,6 +608,48 @@ function Field({
         {label}
       </span>
       {children}
+    </div>
+  );
+}
+
+function DnsRecordRow({
+  copied,
+  label,
+  onCopy,
+  recordKey,
+  value,
+}: {
+  copied: string | null;
+  label: string;
+  onCopy: (text: string, key: string) => void;
+  recordKey: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-[var(--line)] bg-[var(--bg-base)] px-3 py-2">
+      <div className="min-w-0">
+        <p className="font-medium text-[var(--sea-ink)] text-xs">{label}</p>
+        <p className="mt-0.5 truncate font-mono text-[var(--sea-ink-soft)] text-xs">
+          {value}
+        </p>
+      </div>
+      <button
+        className="flex shrink-0 items-center gap-1 rounded-md border border-[var(--line)] px-2 py-1 text-[var(--sea-ink-soft)] text-xs transition-colors hover:bg-[var(--link-bg-hover)]"
+        onClick={() => onCopy(value, recordKey)}
+        type="button"
+      >
+        {copied === recordKey ? (
+          <>
+            <CheckCircle2 className="size-3 text-green-500" />
+            Copied
+          </>
+        ) : (
+          <>
+            <Clipboard className="size-3" />
+            Copy
+          </>
+        )}
+      </button>
     </div>
   );
 }
