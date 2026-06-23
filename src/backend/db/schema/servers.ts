@@ -1,0 +1,27 @@
+import {
+  boolean,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
+
+export const serverStatus = pgTable("server_status", {
+  id: uuid().primaryKey().defaultRandom(),
+  serverId: text("server_id").notNull().unique(),
+  userId: text("user_id").notNull(),
+  name: text().notNull(),
+  online: boolean().notNull().default(false),
+  playerCount: integer("player_count").notNull().default(0),
+  maxPlayers: integer("max_players").notNull().default(20),
+  tps: integer().default(20),
+  cpuUsage: integer("cpu_usage").default(0),
+  ramUsage: integer("ram_usage").default(0),
+  ramMax: integer("ram_max").default(4096),
+  version: text().default("1.20.4"),
+  motd: text().default("A Minecraft Server"),
+  lastHeartbeat: timestamp("last_heartbeat"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});

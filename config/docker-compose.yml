@@ -1,0 +1,44 @@
+services:
+  postgres-users:
+    image: postgres:17-alpine
+    container_name: blockhost-postgres-users
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: local-dev-password-users
+      POSTGRES_DB: users
+    volumes:
+      - pgdata-users:/var/lib/postgresql/data
+
+  postgres-servers:
+    image: postgres:17-alpine
+    container_name: blockhost-postgres-servers
+    restart: unless-stopped
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: local-dev-password-servers
+      POSTGRES_DB: servers
+    volumes:
+      - pgdata-servers:/var/lib/postgresql/data
+
+  redis-cache:
+    image: redis:7-alpine
+    container_name: blockhost-redis-cache
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  redis-background:
+    image: redis:7-alpine
+    container_name: blockhost-redis-background
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+
+volumes:
+  pgdata-users:
+  pgdata-servers:

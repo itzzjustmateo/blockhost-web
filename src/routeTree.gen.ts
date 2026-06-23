@@ -16,6 +16,7 @@ import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as LayoutSignupRouteImport } from './routes/_layout/signup'
 import { Route as LayoutPricingRouteImport } from './routes/_layout/pricing'
 import { Route as LayoutLoginRouteImport } from './routes/_layout/login'
+import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
 import { Route as ApiRpcSplatRouteImport } from './routes/api.rpc.$'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
@@ -53,6 +54,11 @@ const LayoutLoginRoute = LayoutLoginRouteImport.update({
   path: '/login',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutDashboardRoute = LayoutDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const ApiRpcSplatRoute = ApiRpcSplatRouteImport.update({
   id: '/api/rpc/$',
   path: '/api/rpc/$',
@@ -67,6 +73,7 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
   '/mcp': typeof McpRoute
+  '/dashboard': typeof LayoutDashboardRoute
   '/login': typeof LayoutLoginRoute
   '/pricing': typeof LayoutPricingRoute
   '/signup': typeof LayoutSignupRoute
@@ -76,6 +83,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/mcp': typeof McpRoute
+  '/dashboard': typeof LayoutDashboardRoute
   '/login': typeof LayoutLoginRoute
   '/pricing': typeof LayoutPricingRoute
   '/signup': typeof LayoutSignupRoute
@@ -88,6 +96,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_layout': typeof LayoutRouteWithChildren
   '/mcp': typeof McpRoute
+  '/_layout/dashboard': typeof LayoutDashboardRoute
   '/_layout/login': typeof LayoutLoginRoute
   '/_layout/pricing': typeof LayoutPricingRoute
   '/_layout/signup': typeof LayoutSignupRoute
@@ -101,6 +110,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/mcp'
+    | '/dashboard'
     | '/login'
     | '/pricing'
     | '/signup'
@@ -110,6 +120,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/mcp'
+    | '/dashboard'
     | '/login'
     | '/pricing'
     | '/signup'
@@ -121,6 +132,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_layout'
     | '/mcp'
+    | '/_layout/dashboard'
     | '/_layout/login'
     | '/_layout/pricing'
     | '/_layout/signup'
@@ -189,6 +201,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutLoginRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/dashboard': {
+      id: '/_layout/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof LayoutDashboardRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/api/rpc/$': {
       id: '/api/rpc/$'
       path: '/api/rpc/$'
@@ -207,6 +226,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface LayoutRouteChildren {
+  LayoutDashboardRoute: typeof LayoutDashboardRoute
   LayoutLoginRoute: typeof LayoutLoginRoute
   LayoutPricingRoute: typeof LayoutPricingRoute
   LayoutSignupRoute: typeof LayoutSignupRoute
@@ -214,6 +234,7 @@ interface LayoutRouteChildren {
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
+  LayoutDashboardRoute: LayoutDashboardRoute,
   LayoutLoginRoute: LayoutLoginRoute,
   LayoutPricingRoute: LayoutPricingRoute,
   LayoutSignupRoute: LayoutSignupRoute,
