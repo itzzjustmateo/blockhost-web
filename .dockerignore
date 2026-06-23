@@ -1,0 +1,10 @@
+node_modules
+.git
+.cache
+.output
+.temp
+dist
+*.md
+.env
+.env.*
+!.env.docker

@@ -42,6 +42,7 @@ export const serverRoutes = new Elysia({ prefix: "/api/servers" })
         userId: uid,
         serverId,
         name: data.name,
+        port: await serverService.allocatePort(),
         ramMb: data.ramMb,
         storageMb: data.storageMb,
         minecraftVersion: data.minecraftVersion,

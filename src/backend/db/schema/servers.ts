@@ -15,6 +15,7 @@ export const serverStatus = pgTable("server_status", {
   domain: text(),
   software: text(),
   online: boolean().notNull().default(false),
+  port: integer().notNull().default(25_565),
   playerCount: integer("player_count").notNull().default(0),
   maxPlayers: integer("max_players").notNull().default(20),
   tps: integer().default(20),

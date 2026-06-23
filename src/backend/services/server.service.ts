@@ -16,16 +16,38 @@ import { queueServerProvision } from "../queues/server-provision.ts";
 import { serverRepository } from "../repositories/server.repository.ts";
 import { publishServerEvent } from "../websocket/handlers.ts";
 
+const PORT_MIN = 25_565;
+const PORT_MAX = 25_664;
+
 export const serverService = {
+  async allocatePort(preferred?: number): Promise<number> {
+    const used = new Set(await serverRepository.getUsedPorts());
+    if (
+      preferred !== undefined &&
+      !used.has(preferred) &&
+      preferred >= PORT_MIN &&
+      preferred <= PORT_MAX
+    ) {
+      return preferred;
+    }
+    for (let p = PORT_MIN; p <= PORT_MAX; p++) {
+      if (!used.has(p)) {
+        return p;
+      }
+    }
+    throw new Error("No available ports");
+  },
+
   async create(data: {
     userId: string;
     serverId: string;
     name: string;
-    domain?: string;
+    domain?: string | null;
     software?: string;
     ramMb: number;
     storageMb: number;
     minecraftVersion: string;
+    port: number;
   }) {
     const record = await serverRepository.create({
       serverId: data.serverId,
@@ -33,6 +55,7 @@ export const serverService = {
       name: data.name,
       domain: data.domain,
       software: data.software,
+      port: data.port,
       online: false,
       maxPlayers: 20,
       ramMax: data.ramMb,

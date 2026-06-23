@@ -16,7 +16,48 @@ Copy `.env.local` (already exists) and fill in:
 | `BACKEND_HOST` | No | `0.0.0.0` | ElysiaJS API server host |
 | `SERVER_STATUS_TTL` | No | `60` | TTL in seconds for cached server status in Redis |
 | `BULLMQ_PREFIX` | No | `blockhost` | Redis key prefix for BullMQ queues |
+| `BLOCKHOST_SERVERS_DIR` | No | `/tmp/blockhost-servers` | Directory for MC server data files (mounted into Docker) |
 | — | — | — | Cloudflare creds provided at runtime via UI (see "Cloudflare DNS Integration" below) |
+
+## Docker Integration
+
+### Services
+
+| Service | Container Name | Host Port | Internal |
+|---------|---------------|-----------|----------|
+| `postgres-users` | `blockhost-postgres-users` | 5432 | 5432 |
+| `postgres-servers` | `blockhost-postgres-servers` | 5434 | 5432 |
+| `redis-cache` | `blockhost-redis-cache` | 6379 | 6379 |
+| `redis-background` | `blockhost-redis-background` | 6380 | 6379 |
+| `app` | `blockhost-app` | 3000 | 3000 |
+
+### Networks
+
+- **`blockhost`** — bridge network for infrastructure services (PG, Redis) and the app
+- **`blockhost-mc`** — bridge network for MC server containers (managed dynamically by `docker.service.ts`)
+
+### MC Server Containers
+
+Each Minecraft server runs in its own Docker container:
+- Image: `openjdk:21-jre-slim`
+- Network: `blockhost-mc` (isolated from infrastructure)
+- Port: host port `<assigned_port>` : container port `25565` (TCP + UDP)
+- Volume: `BLOCKHOST_SERVERS_DIR/<serverId>:/server` (jars, configs, worlds)
+- Container name: `blockhost-mc-<serverId>`
+- Labels: `blockhost-server-id`, `blockhost-server-name`
+
+### Docker Socket
+
+The app container requires access to the Docker socket (`/var/run/docker.sock`) to manage MC server containers. This is mounted read-write in the docker-compose config.
+
+### Backend Service
+
+`src/backend/services/docker.service.ts` — wraps Docker CLI commands via `child_process.execSync`:
+- `provisionServer()` — creates and starts a new MC server container
+- `stopServer()` / `startServer()` / `restartServer()` — container lifecycle
+- `removeServer()` — deletes the container
+- `isServerRunning()` — checks container state
+- `getServerLogs()` — fetches container logs
 
 ## Cloudflare DNS Integration
 
@@ -92,7 +133,7 @@ Background processing and rate limiting.
 ## Architecture
 
 ```
-TanStack Start (port 3000)
+TanStack Start (port 3000, inside Docker)
   │
   ├── /api/auth/*       → Better Auth handler
   ├── /api/*             → ElysiaJS (catch-all at src/routes/api.$.ts)
@@ -103,7 +144,8 @@ TanStack Start (port 3000)
   │                        │   └── subscription repo      → db      (PostgreSQL #1)
   │                        ├── cache → Redis Cache Instance
   │                        ├── queues → BullMQ (Redis Background Instance, DB 2)
-  │                        └── websocket → WS gateway (Redis Cache Instance, DB 4 pub/sub)
+  │                        ├── websocket → WS gateway (Redis Cache Instance, DB 4 pub/sub)
+  │                        └── docker.service → Docker socket (MC server containers)
   │
   └── /ws                → WebSocket (live dashboard updates)
 
@@ -111,26 +153,45 @@ BullMQ Workers (separate process, uses Redis Background Instance)
   ├── server-provision
   ├── server-control
   └── server-maintenance
+
+MC Server Containers (running on blockhost-mc network)
+  ├── blockhost-mc-<serverId> → openjdk:21-jre-slim, port mapped to host
+  ├── blockhost-mc-<serverId> → ...
+  └── ...
 ```
 
 ## Local Dev Setup (Docker)
 
 ```bash
-# Start PostgreSQL (×2) + Redis (×2)
+# Start all services (PG ×2, Redis ×2, app)
 docker compose -f config/docker-compose.yml up -d
+
+# Watch app logs
+docker compose -f config/docker-compose.yml logs -f app
 
 # Generate auth secret (already set in .env.local, re-run if needed)
 bunx @better-auth/cli secret
 
 # Generate + push schema for BOTH databases
-bun run db:generate
+docker compose -f config/docker-compose.yml exec app bun run db:push
+
+# Restart app after schema push
+docker compose -f config/docker-compose.yml restart app
+```
+
+### Running outside Docker (legacy)
+
+If you prefer to run the app directly on your host (without the app container):
+
+```bash
+# Start only infrastructure services
+docker compose -f config/docker-compose.yml up -d postgres-users postgres-servers redis-cache redis-background
+
+# Start dev server
+bun run dev
+
+# Push schemas
 bun run db:push
-
-# Start dev server + database studio
-bun run dev:all
-
-# Start backend API + workers separately (hot reload)
-bun run backend:dev
 ```
 
 ## Available Scripts
@@ -138,17 +199,13 @@ bun run backend:dev
 | Command | Description |
 |---------|-------------|
 | `bun run dev` | Vite dev server on port 3000 |
-| `bun run dev:all` | Dev server + Drizzle Studio (Go dashboard) |
-| `docker compose -f config/docker-compose.yml up -d` | Start 2× PG + 2× Redis for local dev |
-| `docker compose -f config/docker-compose.yml down` | Stop all containers |
-| `bun run backend:dev` | ElysiaJS API + BullMQ workers (Bun --watch) |
-| `bun run backend:start` | Start backend once |
-| `bun run backend:workers` | BullMQ workers only |
 | `bun run build` | Production build |
-| `bun run db:push` | Push Drizzle schemas to both databases |
-| `bun run db:push:users` | Push only the Users DB schema |
-| `bun run db:push:servers` | Push only the Servers DB schema |
-| `bun run db:generate` | Generate Drizzle migrations for both databases |
+| `docker compose -f config/docker-compose.yml up -d` | Start all services (2× PG + 2× Redis + app) |
+| `docker compose -f config/docker-compose.yml down` | Stop all containers |
+| `docker compose -f config/docker-compose.yml logs -f app` | Watch app logs |
+| `docker compose -f config/docker-compose.yml up -d app` | Start only the app container |
+| `docker compose -f config/docker-compose.yml exec app bun run db:push` | Push Drizzle schemas to both databases |
+| `docker compose -f config/docker-compose.yml restart app` | Restart the app container |
 | `bun run lint` | Check lint/format with Biome |
 | `bun run lint:fix` | Fix lint/format issues |
 | `bun run typecheck` | TypeScript type checking |

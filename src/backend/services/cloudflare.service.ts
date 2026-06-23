@@ -23,27 +23,17 @@ export const cloudflareService = {
     ip: string
   ): Promise<{ success: boolean; records: string[]; error?: string }> {
     const parts = domain.split(".");
-    const subdomain = parts.length > 2 ? parts.slice(0, -2).join(".") : null;
+    const name = parts.length > 2 ? parts.slice(0, -2).join(".") : "@";
 
     const records: CloudflareDnsRecord[] = [
       {
         type: "A",
-        name: "@",
+        name,
         content: ip,
         ttl: 120,
         proxied: true,
       },
     ];
-
-    if (subdomain) {
-      records.push({
-        type: "CNAME",
-        name: subdomain,
-        content: "@",
-        ttl: 120,
-        proxied: true,
-      });
-    }
 
     const created: string[] = [];
 

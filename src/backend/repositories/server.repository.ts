@@ -70,4 +70,11 @@ export const serverRepository = {
       .where(eq(serverStatus.userId, userId));
     return rows.length;
   },
+
+  async getUsedPorts() {
+    const rows = await serversDb
+      .select({ port: serverStatus.port })
+      .from(serverStatus);
+    return rows.map((r) => r.port);
+  },
 };

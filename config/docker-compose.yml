@@ -11,6 +11,8 @@ services:
       POSTGRES_DB: users
     volumes:
       - pgdata-users:/var/lib/postgresql/data
+    networks:
+      - blockhost
 
   postgres-servers:
     image: postgres:17-alpine
@@ -24,6 +26,8 @@ services:
       POSTGRES_DB: servers
     volumes:
       - pgdata-servers:/var/lib/postgresql/data
+    networks:
+      - blockhost
 
   redis-cache:
     image: redis:7-alpine
@@ -31,6 +35,8 @@ services:
     restart: unless-stopped
     ports:
       - "6379:6379"
+    networks:
+      - blockhost
 
   redis-background:
     image: redis:7-alpine
@@ -38,7 +44,50 @@ services:
     restart: unless-stopped
     ports:
       - "6380:6379"
+    networks:
+      - blockhost
+
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: dev
+    container_name: blockhost-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - ../.env.local
+    environment:
+      DATABASE_URL: postgresql://root:local-dev-password-users@postgres-users:5432/users
+      SERVERS_DATABASE_URL: postgresql://root:local-dev-password-servers@postgres-servers:5432/servers
+      REDIS_CACHE_URL: redis://redis-cache:6379
+      REDIS_BACKGROUND_URL: redis://redis-background:6380
+      BETTER_AUTH_URL: http://localhost:3000
+      BLOCKHOST_SERVERS_DIR: /data/servers
+    volumes:
+      - ..:/app
+      - /app/node_modules
+      - servers-data:/data/servers
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - postgres-users
+      - postgres-servers
+      - redis-cache
+      - redis-background
+    networks:
+      - blockhost
+      - blockhost-mc
+
+networks:
+  blockhost:
+    name: blockhost
+    driver: bridge
+  blockhost-mc:
+    name: blockhost-mc
+    driver: bridge
 
 volumes:
   pgdata-users:
   pgdata-servers:
+  servers-data:

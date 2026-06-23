@@ -9,8 +9,10 @@ import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { createFileRoute } from "@tanstack/react-router";
 import { Elysia } from "elysia";
 import { authGuard } from "#/backend/elysia/middleware/auth-guard.ts";
+import { serverRepository } from "#/backend/repositories/server.repository.ts";
 import { subscriptionRepository } from "#/backend/repositories/subscription.repository.ts";
 import { cloudflareService } from "#/backend/services/cloudflare.service.ts";
+import { dockerService } from "#/backend/services/docker.service.ts";
 import { serverService } from "#/backend/services/server.service.ts";
 import router from "#/orpc/router";
 import { TodoSchema } from "#/orpc/schema";
@@ -71,11 +73,12 @@ const elysiaApp = new Elysia({ prefix: "/api" })
         domain?: string;
         minecraftVersion: string;
         software: string;
+        port?: number;
       };
       const serverId = crypto.randomUUID();
-      const finalDomain =
-        data.domain ??
-        `${data.name.toLowerCase().replace(/[^a-z0-9-]/g, "")}.siuuuhd.de`;
+      const finalDomain = data.domain ?? null;
+
+      const port = await serverService.allocatePort(data.port);
 
       const server = await serverService.create({
         userId,
@@ -83,19 +86,28 @@ const elysiaApp = new Elysia({ prefix: "/api" })
         name: data.name,
         domain: finalDomain,
         software: data.software,
+        port,
         ramMb: 2048,
         storageMb: 10_240,
         minecraftVersion: data.minecraftVersion,
       });
 
-      // Download jar in the background
-      downloadServerJar(serverId, data.software, data.minecraftVersion);
+      // Download jar and run in Docker
+      downloadServerJar(
+        serverId,
+        data.name,
+        data.software,
+        data.minecraftVersion,
+        port,
+        2048
+      );
 
       return {
         server: {
           ...server,
           domain: finalDomain,
           software: data.software,
+          port,
         },
       };
     } catch (error) {
@@ -105,6 +117,15 @@ const elysiaApp = new Elysia({ prefix: "/api" })
           error instanceof Error ? error.message : "Failed to create server",
       };
     }
+  })
+
+  .get("/servers/available-ports", async ({ userId, set }) => {
+    if (!userId) {
+      set.status = 401;
+      return { error: "Unauthorized" };
+    }
+    const used = await serverRepository.getUsedPorts();
+    return { usedPorts: used };
   })
 
   .get("/plans", async () => {
@@ -204,8 +225,11 @@ const orpcHandler = new OpenAPIHandler(router, {
 
 async function downloadServerJar(
   serverId: string,
+  serverName: string,
   software: string,
-  version: string
+  version: string,
+  port: number,
+  ramMb: number
 ) {
   const dir = `/tmp/blockhost-servers/${serverId}`;
   try {
@@ -231,6 +255,9 @@ async function downloadServerJar(
     );
     chmodSync(join(dir, "start.sh"), 0o755);
     console.log(`[Provision] Server ${serverId} downloaded to ${dir}`);
+
+    // Run the server in Docker
+    dockerService.provisionServer(serverId, serverName, port, ramMb);
   } catch (err) {
     console.error(`[Provision] Failed to provision ${serverId}:`, err);
   }

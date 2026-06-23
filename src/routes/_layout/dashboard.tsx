@@ -321,6 +321,40 @@ function CreateServerModal({ onClose }: { onClose: () => void }) {
   const [showManualDns, setShowManualDns] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [port, setPort] = useState(25_565);
+  const [portDirty, setPortDirty] = useState(false);
+  const [useDomain, setUseDomain] = useState(true);
+
+  const { data: usedPorts } = useQuery({
+    queryKey: ["used-ports"],
+    queryFn: async () => {
+      const res = await fetch("/api/servers/available-ports");
+      const data = await res.json();
+      return new Set<number>(data.usedPorts);
+    },
+    staleTime: 30_000,
+  });
+
+  const portError = (() => {
+    if (portDirty && usedPorts?.has(port)) {
+      return "Port is already in use by another server";
+    }
+    if (port < 25_565 || port > 65_535) {
+      return "Port must be between 25565 and 65535";
+    }
+    return null;
+  })();
+
+  useEffect(() => {
+    if (!portDirty && usedPorts) {
+      for (let p = 25_565; p <= 25_664; p++) {
+        if (!usedPorts.has(p)) {
+          setPort(p);
+          break;
+        }
+      }
+    }
+  }, [usedPorts, portDirty]);
 
   const { data: versions, isLoading: versionsLoading } = useQuery({
     queryKey: ["mc-versions", software],
@@ -396,21 +430,27 @@ function CreateServerModal({ onClose }: { onClose: () => void }) {
       setError("Server name is required");
       return;
     }
-    if (!domain.trim()) {
+    if (useDomain && !domain.trim()) {
       setError("Domain is required");
       return;
     }
     setCreating(true);
     setError(null);
+    if (portError) {
+      setError(portError);
+      setCreating(false);
+      return;
+    }
     try {
       const res = await fetch("/api/servers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
-          domain: domain.trim(),
+          ...(useDomain ? { domain: domain.trim() } : {}),
           minecraftVersion: selectedVersion,
           software,
+          port,
         }),
       });
       const data = await res.json();
@@ -457,107 +497,138 @@ function CreateServerModal({ onClose }: { onClose: () => void }) {
 
           <Field label="Domain">
             <div className="space-y-3">
-              <div className="relative">
-                <Globe className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--kicker)]" />
-                <input
-                  className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] py-2.5 pr-4 pl-9 text-sm outline-none transition-colors focus:border-[var(--sea-ink)]"
-                  onChange={(e) => setDomain(e.target.value)}
-                  placeholder="server.siuuuhd.de or mydomain.com"
-                  value={domain}
-                />
+              <div className="flex items-center gap-2">
+                <button
+                  className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 font-medium text-xs transition-colors ${
+                    useDomain
+                      ? "border-[var(--sea-ink)] bg-[var(--sea-ink)] text-white"
+                      : "border-[var(--line)] bg-[var(--surface-strong)] text-[var(--sea-ink-soft)]"
+                  }`}
+                  onClick={() => setUseDomain(true)}
+                  type="button"
+                >
+                  <Globe className="size-3" />
+                  Domain
+                </button>
+                <button
+                  className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 font-medium text-xs transition-colors ${
+                    useDomain
+                      ? "border-[var(--line)] bg-[var(--surface-strong)] text-[var(--sea-ink-soft)]"
+                      : "border-[var(--sea-ink)] bg-[var(--sea-ink)] text-white"
+                  }`}
+                  onClick={() => setUseDomain(false)}
+                  type="button"
+                >
+                  <Server className="size-3" />
+                  IP Only
+                </button>
               </div>
 
-              {domain && isSiuuuHD && (
-                <div className="flex items-start gap-2.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 dark:border-green-900/40 dark:bg-green-950/20">
-                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-600 dark:text-green-400" />
-                  <div>
-                    <p className="font-medium text-green-700 text-sm dark:text-green-300">
-                      SiuuuHD Subdomain — Auto-configured
-                    </p>
-                    <p className="mt-0.5 text-green-600 text-xs dark:text-green-400">
-                      No additional DNS setup needed. This domain is ready to
-                      use.
-                    </p>
+              {useDomain ? (
+                <>
+                  <div className="relative">
+                    <Globe className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--kicker)]" />
+                    <input
+                      className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] py-2.5 pr-4 pl-9 text-sm outline-none transition-colors focus:border-[var(--sea-ink)]"
+                      onChange={(e) => setDomain(e.target.value)}
+                      placeholder="server.siuuuhd.de or mydomain.com"
+                      value={domain}
+                    />
                   </div>
-                </div>
-              )}
 
-              {domain && !isSiuuuHD && (
-                <div className="space-y-3">
-                  <CloudflareConfig
-                    cloudflareError={cloudflareError}
-                    cloudflareSuccess={cloudflareSuccess}
-                    cloudflareToken={cloudflareToken}
-                    cloudflareZoneId={cloudflareZoneId}
-                    configuringCloudflare={configuringCloudflare}
-                    domain={domain}
-                    onConfigure={handleCloudflareConfigure}
-                    onHideForm={() => {
-                      setShowCloudflareForm(false);
-                      setCloudflareError(null);
-                    }}
-                    onReset={resetCloudflare}
-                    onSetToken={setCloudflareToken}
-                    onSetZoneId={setCloudflareZoneId}
-                    onShowForm={() => setShowCloudflareForm(true)}
-                    showCloudflareForm={showCloudflareForm}
-                  />
-
-                  {/* Manual DNS */}
-                  <div className="rounded-lg border border-[var(--line)]">
-                    <button
-                      className="flex w-full items-center justify-between px-3 py-2.5 text-left font-medium text-[var(--sea-ink)] text-sm transition-colors hover:bg-[var(--link-bg-hover)]"
-                      onClick={() => setShowManualDns(!showManualDns)}
-                      type="button"
-                    >
-                      <span className="flex items-center gap-2">
-                        <Globe className="size-4 text-[var(--kicker)]" />
-                        Configure manually via DNS
-                      </span>
-                      {showManualDns ? (
-                        <ChevronDown className="size-4 text-[var(--kicker)]" />
-                      ) : (
-                        <ChevronRight className="size-4 text-[var(--kicker)]" />
-                      )}
-                    </button>
-
-                    {showManualDns && (
-                      <div className="space-y-3 border-[var(--line)] border-t px-3 py-3">
-                        <p className="text-[var(--sea-ink-soft)] text-xs">
-                          Point your domain to BlockHost by adding these DNS
-                          records at your registrar:
+                  {domain && isSiuuuHD && (
+                    <div className="flex items-start gap-2.5 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 dark:border-green-900/40 dark:bg-green-950/20">
+                      <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-600 dark:text-green-400" />
+                      <div>
+                        <p className="font-medium text-green-700 text-sm dark:text-green-300">
+                          SiuuuHD Subdomain — Auto-configured
                         </p>
-
-                        <DnsRecordRow
-                          copied={copied}
-                          label="A Record (root)"
-                          onCopy={copyToClipboard}
-                          recordKey="a-root"
-                          value="185.234.72.18"
-                        />
-                        <DnsRecordRow
-                          copied={copied}
-                          label="A Record (www)"
-                          onCopy={copyToClipboard}
-                          recordKey="a-www"
-                          value="185.234.72.18"
-                        />
-                        <DnsRecordRow
-                          copied={copied}
-                          label="CNAME Record"
-                          onCopy={copyToClipboard}
-                          recordKey="cname"
-                          value={`${cleanName || "server"}.blockhost.io`}
-                        />
+                        <p className="mt-0.5 text-green-600 text-xs dark:text-green-400">
+                          No additional DNS setup needed. This domain is ready
+                          to use.
+                        </p>
                       </div>
-                    )}
+                    </div>
+                  )}
+
+                  {domain && !isSiuuuHD && (
+                    <div className="space-y-3">
+                      <CloudflareConfig
+                        cloudflareError={cloudflareError}
+                        cloudflareSuccess={cloudflareSuccess}
+                        cloudflareToken={cloudflareToken}
+                        cloudflareZoneId={cloudflareZoneId}
+                        configuringCloudflare={configuringCloudflare}
+                        domain={domain}
+                        onConfigure={handleCloudflareConfigure}
+                        onHideForm={() => {
+                          setShowCloudflareForm(false);
+                          setCloudflareError(null);
+                        }}
+                        onReset={resetCloudflare}
+                        onSetToken={setCloudflareToken}
+                        onSetZoneId={setCloudflareZoneId}
+                        onShowForm={() => setShowCloudflareForm(true)}
+                        showCloudflareForm={showCloudflareForm}
+                      />
+
+                      {/* Manual DNS */}
+                      <div className="rounded-lg border border-[var(--line)]">
+                        <button
+                          className="flex w-full items-center justify-between px-3 py-2.5 text-left font-medium text-[var(--sea-ink)] text-sm transition-colors hover:bg-[var(--link-bg-hover)]"
+                          onClick={() => setShowManualDns(!showManualDns)}
+                          type="button"
+                        >
+                          <span className="flex items-center gap-2">
+                            <Globe className="size-4 text-[var(--kicker)]" />
+                            Configure manually via DNS
+                          </span>
+                          {showManualDns ? (
+                            <ChevronDown className="size-4 text-[var(--kicker)]" />
+                          ) : (
+                            <ChevronRight className="size-4 text-[var(--kicker)]" />
+                          )}
+                        </button>
+
+                        {showManualDns && (
+                          <div className="space-y-3 border-[var(--line)] border-t px-3 py-3">
+                            <p className="text-[var(--sea-ink-soft)] text-xs">
+                              Point your domain to BlockHost by adding this DNS
+                              record at your registrar:
+                            </p>
+                            <DnsRecordRow
+                              copied={copied}
+                              label="A Record"
+                              onCopy={copyToClipboard}
+                              recordKey="a-record"
+                              value="185.234.72.18"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex items-start gap-2.5 rounded-lg border border-[var(--line)] bg-[var(--surface-strong)] px-3 py-2.5">
+                  <Server className="mt-0.5 size-4 shrink-0 text-[var(--kicker)]" />
+                  <div>
+                    <p className="font-medium text-[var(--sea-ink)] text-sm">
+                      Connect via IP
+                    </p>
+                    <p className="mt-0.5 text-[var(--sea-ink-soft)] text-xs">
+                      Your server will be accessible at{" "}
+                      <code className="rounded bg-[var(--bg-base)] px-1 py-0.5 font-mono">
+                        185.234.72.18:{port}
+                      </code>
+                    </p>
                   </div>
                 </div>
               )}
             </div>
           </Field>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <Field label="Server Software">
               <select
                 className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--sea-ink)]"
@@ -588,6 +659,29 @@ function CreateServerModal({ onClose }: { onClose: () => void }) {
                   ))
                 )}
               </select>
+            </Field>
+
+            <Field label="Port">
+              <input
+                className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--sea-ink)] ${
+                  portError
+                    ? "border-red-400 bg-red-50 dark:border-red-800 dark:bg-red-950/20"
+                    : "border-[var(--line)] bg-[var(--surface-strong)]"
+                }`}
+                max={65_535}
+                min={25_565}
+                onChange={(e) => {
+                  setPort(Number(e.target.value));
+                  setPortDirty(true);
+                }}
+                type="number"
+                value={port}
+              />
+              {portError && (
+                <p className="mt-1 text-red-600 text-xs dark:text-red-400">
+                  {portError}
+                </p>
+              )}
             </Field>
           </div>
 

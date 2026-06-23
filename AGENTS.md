@@ -22,8 +22,11 @@ A modern Minecraft server hosting platform built with TanStack Start.
 | `bun run test` | Run Vitest tests |
 | `bun run db:push` | Push Drizzle schema to database |
 | `bun run generate-routes` | Regenerate TanStack Router routes |
-| `bun x ultracite fix` | Format and lint all files |
-| `bun x ultracite check` | Check for lint/format issues |
+| `bun run lint:fix` | Format and lint all files |
+| `bun run lint:check` | Check for lint/format issues |
+| `docker compose -f config/docker-compose.yml up -d` | Start all services (PG ×2, Redis ×2, app) |
+| `docker compose -f config/docker-compose.yml up -d app` | Start only the app (after deps are up) |
+| `docker compose -f config/docker-compose.yml logs -f app` | Watch app logs |
 
 ## Project Structure
 
