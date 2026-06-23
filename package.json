@@ -68,6 +68,7 @@
   "scripts": {
     "dev": "vite dev --port 3000",
     "dev:all": "bash ./src/tools/dev.sh",
+    "dev:all:tui": "bash ./src/tools/dev-tui.sh",
     "build": "vite build",
     "preview": "vite preview",
     "generate-routes": "tsr generate",

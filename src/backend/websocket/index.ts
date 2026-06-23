@@ -15,9 +15,9 @@ export function setupWebSocket(app: Elysia) {
     close(ws) {
       removeClient(ws as unknown as WebSocket);
     },
-    message(ws, raw) {
+    message(ws, raw: unknown) {
       try {
-        const msg = JSON.parse(raw.toString());
+        const msg = JSON.parse(String(raw));
         if (msg.type === "ping") {
           ws.send(
             JSON.stringify({ event: "pong", data: { timestamp: Date.now() } })
