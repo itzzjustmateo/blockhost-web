@@ -16,6 +16,38 @@ Copy `.env.local` (already exists) and fill in:
 | `BACKEND_HOST` | No | `0.0.0.0` | ElysiaJS API server host |
 | `SERVER_STATUS_TTL` | No | `60` | TTL in seconds for cached server status in Redis |
 | `BULLMQ_PREFIX` | No | `blockhost` | Redis key prefix for BullMQ queues |
+| — | — | — | Cloudflare creds provided at runtime via UI (see "Cloudflare DNS Integration" below) |
+
+## Cloudflare DNS Integration
+
+BlockHost can automatically configure DNS records for external domains via the Cloudflare API.
+
+### How it works
+
+1. User enters an external domain (not `*.siuuuhd.de`) in the Create Server modal
+2. User clicks "Configure" and provides their Cloudflare API Token + Zone ID
+3. Backend verifies the token via `GET /user/tokens/verify`
+4. Backend creates DNS records on the user's Cloudflare zone:
+   - **A record** (`@`) pointing `185.234.72.18` (proxied)
+   - **CNAME record** (subdomain) pointing to `@` (proxied) — only if the domain has a subdomain
+5. On success, the UI shows a green confirmation
+
+### API Token Requirements
+
+The token needs the `DNS:Edit` permission for the zone. Generate one at:
+`https://dash.cloudflare.com/profile/api-tokens` → "Create Token" → "Edit DNS Zones" template.
+
+### API Endpoint
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/servers/cloudflare-dns` | Create DNS records; body: `{ apiToken, zoneId, domain }` |
+
+### Backend Service
+
+`src/backend/services/cloudflare.service.ts` — wraps the Cloudflare v4 API:
+- `verifyToken(apiToken)` — validates the API token
+- `addDnsRecords(apiToken, zoneId, domain, ip)` — creates A + CNAME records
 
 ## PostgreSQL — Two Databases
 

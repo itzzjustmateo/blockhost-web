@@ -313,6 +313,11 @@ function CreateServerModal({ onClose }: { onClose: () => void }) {
   const [software, setSoftware] = useState<SoftwareKey>("paper");
   const [creating, setCreating] = useState(false);
   const [configuringCloudflare, setConfiguringCloudflare] = useState(false);
+  const [cloudflareToken, setCloudflareToken] = useState("");
+  const [cloudflareZoneId, setCloudflareZoneId] = useState("");
+  const [showCloudflareForm, setShowCloudflareForm] = useState(false);
+  const [cloudflareError, setCloudflareError] = useState<string | null>(null);
+  const [cloudflareSuccess, setCloudflareSuccess] = useState(false);
   const [showManualDns, setShowManualDns] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -342,10 +347,42 @@ function CreateServerModal({ onClose }: { onClose: () => void }) {
   }, [cleanName, domain]);
 
   const handleCloudflareConfigure = async () => {
+    if (!(cloudflareToken && cloudflareZoneId)) {
+      setShowCloudflareForm(true);
+      return;
+    }
     setConfiguringCloudflare(true);
-    // TODO: call Cloudflare API to add DNS records
-    await new Promise((r) => setTimeout(r, 1200));
-    setConfiguringCloudflare(false);
+    setCloudflareError(null);
+    try {
+      const res = await fetch("/api/servers/cloudflare-dns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiToken: cloudflareToken,
+          zoneId: cloudflareZoneId,
+          domain,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCloudflareError(data.error ?? "Failed to configure Cloudflare");
+        return;
+      }
+      setCloudflareSuccess(true);
+      setShowCloudflareForm(false);
+    } catch {
+      setCloudflareError("Network error. Please try again.");
+    } finally {
+      setConfiguringCloudflare(false);
+    }
+  };
+
+  const resetCloudflare = () => {
+    setCloudflareToken("");
+    setCloudflareZoneId("");
+    setCloudflareSuccess(false);
+    setCloudflareError(null);
+    setShowCloudflareForm(false);
   };
 
   const copyToClipboard = async (text: string, key: string) => {
@@ -447,39 +484,24 @@ function CreateServerModal({ onClose }: { onClose: () => void }) {
 
               {domain && !isSiuuuHD && (
                 <div className="space-y-3">
-                  {/* Automatic: Cloudflare */}
-                  <div className="rounded-lg border border-[var(--line)] bg-[var(--surface-strong)] p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <Cloud className="size-4 text-blue-500" />
-                        <span className="font-medium text-[var(--sea-ink)] text-sm">
-                          Auto-configure via Cloudflare
-                        </span>
-                      </div>
-                      <button
-                        className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-blue-600 px-3 font-medium text-white text-xs transition-all hover:bg-blue-700 disabled:opacity-50"
-                        disabled={configuringCloudflare}
-                        onClick={handleCloudflareConfigure}
-                        type="button"
-                      >
-                        {configuringCloudflare ? (
-                          <>
-                            <div className="inline-block size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                            Configuring...
-                          </>
-                        ) : (
-                          <>
-                            <Cloud className="size-3.5" />
-                            Configure
-                          </>
-                        )}
-                      </button>
-                    </div>
-                    <p className="mt-1.5 text-[var(--sea-ink-soft)] text-xs">
-                      We'll automatically add the required DNS records to your
-                      Cloudflare zone.
-                    </p>
-                  </div>
+                  <CloudflareConfig
+                    cloudflareError={cloudflareError}
+                    cloudflareSuccess={cloudflareSuccess}
+                    cloudflareToken={cloudflareToken}
+                    cloudflareZoneId={cloudflareZoneId}
+                    configuringCloudflare={configuringCloudflare}
+                    domain={domain}
+                    onConfigure={handleCloudflareConfigure}
+                    onHideForm={() => {
+                      setShowCloudflareForm(false);
+                      setCloudflareError(null);
+                    }}
+                    onReset={resetCloudflare}
+                    onSetToken={setCloudflareToken}
+                    onSetZoneId={setCloudflareZoneId}
+                    onShowForm={() => setShowCloudflareForm(true)}
+                    showCloudflareForm={showCloudflareForm}
+                  />
 
                   {/* Manual DNS */}
                   <div className="rounded-lg border border-[var(--line)]">
@@ -792,6 +814,153 @@ function DnsRecordRow({
           </>
         )}
       </button>
+    </div>
+  );
+}
+
+function CloudflareConfig({
+  cloudflareSuccess,
+  cloudflareToken,
+  cloudflareZoneId,
+  cloudflareError,
+  configuringCloudflare,
+  showCloudflareForm,
+  domain,
+  onSetToken,
+  onSetZoneId,
+  onConfigure,
+  onShowForm,
+  onHideForm,
+  onReset,
+}: {
+  cloudflareSuccess: boolean;
+  cloudflareToken: string;
+  cloudflareZoneId: string;
+  cloudflareError: string | null;
+  configuringCloudflare: boolean;
+  showCloudflareForm: boolean;
+  domain: string;
+  onSetToken: (v: string) => void;
+  onSetZoneId: (v: string) => void;
+  onConfigure: () => void;
+  onShowForm: () => void;
+  onHideForm: () => void;
+  onReset: () => void;
+}) {
+  if (cloudflareSuccess) {
+    return (
+      <div className="rounded-lg border border-[var(--line)] bg-[var(--surface-strong)] p-3">
+        <div className="flex items-start gap-2.5">
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-600 dark:text-green-400" />
+          <div>
+            <p className="font-medium text-green-700 text-sm dark:text-green-300">
+              Cloudflare configured successfully
+            </p>
+            <p className="mt-0.5 text-green-600 text-xs dark:text-green-400">
+              DNS records have been created for {domain}.
+            </p>
+            <button
+              className="mt-1.5 text-green-600 text-xs underline hover:text-green-700 dark:text-green-400"
+              onClick={onReset}
+              type="button"
+            >
+              Reconfigure
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (showCloudflareForm) {
+    return (
+      <div className="rounded-lg border border-[var(--line)] bg-[var(--surface-strong)] p-3">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Cloud className="size-4 text-blue-500" />
+            <span className="font-medium text-[var(--sea-ink)] text-sm">
+              Cloudflare Credentials
+            </span>
+          </div>
+          <input
+            className="w-full rounded-lg border border-[var(--line)] bg-[var(--bg-base)] px-3 py-2 text-xs outline-none transition-colors focus:border-[var(--sea-ink)]"
+            onChange={(e) => onSetToken(e.target.value)}
+            placeholder="Cloudflare API Token"
+            type="password"
+            value={cloudflareToken}
+          />
+          <input
+            className="w-full rounded-lg border border-[var(--line)] bg-[var(--bg-base)] px-3 py-2 text-xs outline-none transition-colors focus:border-[var(--sea-ink)]"
+            onChange={(e) => onSetZoneId(e.target.value)}
+            placeholder="Zone ID (found in Cloudflare dashboard)"
+            value={cloudflareZoneId}
+          />
+          {cloudflareError && (
+            <p className="text-red-600 text-xs dark:text-red-400">
+              {cloudflareError}
+            </p>
+          )}
+          <div className="flex gap-2">
+            <button
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-blue-600 px-3 font-medium text-white text-xs transition-all hover:bg-blue-700 disabled:opacity-50"
+              disabled={configuringCloudflare}
+              onClick={onConfigure}
+              type="button"
+            >
+              {configuringCloudflare ? (
+                <>
+                  <div className="inline-block size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Configuring...
+                </>
+              ) : (
+                <>
+                  <Cloud className="size-3.5" />
+                  Configure DNS
+                </>
+              )}
+            </button>
+            <button
+              className="inline-flex h-8 items-center rounded-lg border border-[var(--line)] px-3 font-medium text-[var(--sea-ink)] text-xs transition-colors hover:bg-[var(--link-bg-hover)]"
+              onClick={onHideForm}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
+          <p className="text-[var(--sea-ink-soft)] text-xs">
+            Your API token needs{" "}
+            <code className="rounded bg-[var(--surface-strong)] px-1 py-0.5 font-mono">
+              DNS:Edit
+            </code>{" "}
+            permission. Find your Zone ID in the Cloudflare dashboard overview.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-[var(--line)] bg-[var(--surface-strong)] p-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <Cloud className="size-4 text-blue-500" />
+          <span className="font-medium text-[var(--sea-ink)] text-sm">
+            Auto-configure via Cloudflare
+          </span>
+        </div>
+        <button
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-blue-600 px-3 font-medium text-white text-xs transition-all hover:bg-blue-700 disabled:opacity-50"
+          onClick={onShowForm}
+          type="button"
+        >
+          <Cloud className="size-3.5" />
+          Configure
+        </button>
+      </div>
+      <p className="mt-1.5 text-[var(--sea-ink-soft)] text-xs">
+        We'll automatically add the required DNS records to your Cloudflare
+        zone.
+      </p>
     </div>
   );
 }

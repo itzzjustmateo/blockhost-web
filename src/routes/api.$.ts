@@ -10,6 +10,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Elysia } from "elysia";
 import { authGuard } from "#/backend/elysia/middleware/auth-guard.ts";
 import { subscriptionRepository } from "#/backend/repositories/subscription.repository.ts";
+import { cloudflareService } from "#/backend/services/cloudflare.service.ts";
 import { serverService } from "#/backend/services/server.service.ts";
 import router from "#/orpc/router";
 import { TodoSchema } from "#/orpc/schema";
@@ -114,6 +115,47 @@ const elysiaApp = new Elysia({ prefix: "/api" })
   .post("/redeem", ({ body }) => {
     const code = (body as { code: string }).code;
     return { success: true, message: `Code "${code}" redeemed (stub)` };
+  })
+
+  .post("/servers/cloudflare-dns", async ({ userId, body, set }) => {
+    if (!userId) {
+      set.status = 401;
+      return { error: "Unauthorized" };
+    }
+    const { apiToken, zoneId, domain } = body as {
+      apiToken: string;
+      zoneId: string;
+      domain: string;
+    };
+
+    if (!(apiToken && zoneId && domain)) {
+      set.status = 400;
+      return { error: "apiToken, zoneId, and domain are required" };
+    }
+
+    // Verify the token first
+    const valid = await cloudflareService.verifyToken(apiToken);
+    if (!valid) {
+      set.status = 400;
+      return { error: "Invalid Cloudflare API token" };
+    }
+
+    // Our server IP
+    const ip = "185.234.72.18";
+
+    const result = await cloudflareService.addDnsRecords(
+      apiToken,
+      zoneId,
+      domain,
+      ip
+    );
+
+    if (!result.success) {
+      set.status = 400;
+      return { error: result.error ?? "Failed to configure DNS" };
+    }
+
+    return { success: true, records: result.records };
   });
 
 const orpcHandler = new OpenAPIHandler(router, {
