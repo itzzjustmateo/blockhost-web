@@ -1,0 +1,31 @@
+{
+  "projectName": "blockhost-web-remake",
+  "mode": "file-router",
+  "typescript": true,
+  "packageManager": "bun",
+  "includeExamples": false,
+  "tailwind": true,
+  "addOnOptions": {
+    "drizzle": {
+      "database": "postgresql"
+    }
+  },
+  "envVarValues": {},
+  "git": true,
+  "install": true,
+  "routerOnly": false,
+  "version": 1,
+  "framework": "react",
+  "chosenAddOns": [
+    "nitro",
+    "neon",
+    "tanstack-query",
+    "better-auth",
+    "shadcn",
+    "paraglide",
+    "oRPC",
+    "mcp",
+    "form",
+    "drizzle"
+  ]
+}
